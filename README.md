@@ -11,7 +11,4 @@ Simple project to have my scripts that I use on a daily basis into a single modu
 
 ## Current Scripts
 - ```create_cpp_class```: Create a new C++ class header and source file given a class name.
-- ```add_cpp_definitions```: Add definitions of an C++ header to the cpp file if not present.
-
-## TODO
-Make ```--help``` command available in subcommands.
+- ```add_cpp_definitions```: Add definitions of a C++ header to the cpp file if not present.
