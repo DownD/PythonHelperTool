@@ -1,84 +1,51 @@
-import argparse
-import os
-from typing import Sequence
+import sys
+from argparse import ArgumentParser
+from typing import Callable, Optional
 
-cpp_header_content = """
+from myutils.cpp_class_creator import create_cpp_class
+from myutils.cpp_definition_adder import add_class_definitions_to_cpp
 
-class <class_name> {
-    public:
-        <class_name>();
-        ~<class_name>();
-};
-"""
-cpp_source_file = """
-#include "<class_name>.h"
-
-<class_name>::<class_name>(){
+scripts_dict: dict[str, tuple[Callable, Optional[ArgumentParser]]] = {
+    "create_cpp_class": (create_cpp_class, None),
+    "add_cpp_definitions": (add_class_definitions_to_cpp, None),
 }
-
-<class_name>::~<class_name>() {
-}
-
-"""
-
-
-def create_cpp_class(
-    cpp_parser: argparse.ArgumentParser, args_partial: Sequence[str]
-):
-    """
-    This is the main function of the cpp_tools script.
-
-    Args:
-        cpp_parser (argparse.ArgumentParser): _description_
-    """
-    cpp_parser.add_argument("class_name", type=str)
-    args = cpp_parser.parse_args(args_partial)
-
-    class_name: str = args.class_name
-
-    # Enforce CamelCase
-    class_name = class_name[0].capitalize() + class_name[1:]
-    if "_" in class_name:
-        class_name = class_name.replace("_", " ").title().replace(" ", "")
-
-    # File names
-    header_file = class_name + ".h"
-    cpp_file = class_name + ".cpp"
-
-    # Check if file already exists
-    if os.path.isfile(cpp_file) or os.path.isfile(header_file):
-        print("File already exists. Aborting...")
-        return
-
-    # Create Header file
-    with open(header_file, "w", encoding="utf-8") as file:
-        file.write(cpp_header_content.replace("<class_name>", class_name))
-
-    print("Created header file: " + header_file)
-
-    with open(cpp_file, "w", encoding="utf-8") as file:
-        file.write(cpp_source_file.replace("<class_name>", class_name))
-
-    print("Created cpp file: " + cpp_file)
-    print("Files created successfully")
 
 
 def main():
     """
     This is the main function of the script.
     """
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = ArgumentParser()
     subparsers = parser.add_subparsers()
 
-    cpp_parser = subparsers.add_parser("create_cpp_class")
-    cpp_parser.set_defaults(func=create_cpp_class)
+    # Create a subparser for each script and store it in the scripts_dict
+    for script_name, tuple_function in scripts_dict.items():
+        script_parser = subparsers.add_parser(script_name)
+        script_parser.set_defaults(func=tuple_function[0])
+        scripts_dict[script_name] = (tuple_function[0], script_parser)
 
-    args, args_partial = parser.parse_known_args()
+    # Set temporary variables
+    argv_set = set(sys.argv)
+    tmp_argv = sys.argv.copy()
+    script_in_use = set(scripts_dict.keys()).intersection(argv_set)
 
-    if "func" not in args:
-        parser.print_help()
-        return
-    args.func(cpp_parser, args_partial)  # pylint: disable=no-member
+    # Remove the --help flag from the argv list if one of the subcommands is in use
+    if {"--help", "-h"}.intersection(sys.argv) and len(script_in_use) > 0:
+        if "--help" in sys.argv:
+            tmp_argv.remove("--help")
+        else:
+            tmp_argv.remove("-h")
+
+    # Parse the arguments without the help flag if provided
+    args, args_partial = parser.parse_known_args(tmp_argv[1:])
+
+    # Adds the help flag back to the argv list if it was removed
+    if tmp_argv != sys.argv:
+        args_partial.append("--help")
+
+    # Launch the script with the correct commands
+    script_sub_parser = scripts_dict[script_in_use.pop()][1]
+    args.func(script_parser, args_partial)  # pylint: disable=no-member
 
 
 if "__main__" == __name__:
