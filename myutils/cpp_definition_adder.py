@@ -1,7 +1,10 @@
 import argparse
+import logging
 import os
 import re
 from typing import Sequence
+
+LOGGER = logging.getLogger(__name__)
 
 
 class CppFunction:
@@ -52,10 +55,13 @@ class CppFunction:
             (
                 self.return_type,
                 self.function_name,
-                self.arguments_types,
+                tuple(self.arguments_types),
                 self.class_name,
             )
         )
+
+    def __str__(self) -> str:
+        return f"{self.return_type} {self.class_name}::{self.function_name}({self.arguments_str})"
 
 
 def compare_functions(
@@ -109,13 +115,20 @@ def get_functions_from_header(
     lst_classes = re.findall(class_regex, file_data)
 
     for class_name, class_content in lst_classes:
-        return_type, func_name, arguments = re.findall(
+
+        logging.debug(
+            "Doing regex on class %s with content (%s)",
+            class_name,
+            class_content,
+        )
+        regex_results: list[tuple[str, str, str]] = re.findall(
             function_regex, class_content
         )
-        cpp_functions.add(
-            CppFunction(return_type, func_name, arguments, class_name)
-        )
 
+        for return_type, function_name, arguments in regex_results:
+            cpp_functions.add(
+                CppFunction(return_type, function_name, arguments, class_name)
+            )
     return cpp_functions
 
 
@@ -156,6 +169,31 @@ def get_functions_definitions_from_cpp(
     return functions_set
 
 
+def add_function_definitions(cpp_file: str, functions: set[CppFunction]):
+    """
+    This function adds the function definitions to the cpp file.
+
+    Args:
+        cpp_file (str): The path of the cpp file.
+        functions (Sequence[CppFunction]): The functions to add to the cpp file.
+    """
+    with open(cpp_file, "r+", encoding="utf-8") as file:
+        content = file.read().rstrip("\n")
+        content += "\n"
+
+        file.seek(0)
+        for function in functions:
+            content += "\n"
+            function_definition = f"{function.return_type} {function.class_name}::{function.function_name}({function.arguments_str}) {{\n}}\n"
+            content += function_definition
+
+        file.write(content)
+        file.truncate()
+        LOGGER.info(
+            "%d changes have been written to {cpp_file}", {len(functions)}
+        )
+
+
 def add_class_definitions_to_cpp(
     cpp_parser: argparse.ArgumentParser, args_partial: Sequence[str]
 ):
@@ -166,25 +204,41 @@ def add_class_definitions_to_cpp(
         cpp_parser (argparse.ArgumentParser): _description_
         args_partial (Sequence[str]): _description_
     """
-    cpp_parser.add_argument("-h", "--header_name", type=str, optional=True)
-    cpp_parser.add_argument("-p", "--path", type=str, default="", const="")
+
+    logging.basicConfig(
+        level=logging.INFO, format="[%(levelname)s] %(message)s"
+    )
+
+    cpp_parser.add_argument(
+        "-f", "--file", type=str, help="The header file name"
+    )
+    cpp_parser.add_argument(
+        "-p",
+        "--path",
+        type=str,
+        default=".",
+        const=".",
+        nargs="?",
+        help="The path",
+    )
     args = cpp_parser.parse_args(args_partial)
 
     lst_headers: list[tuple[str, str]] = []
 
-    if "header_name" in args:
-        header_file = args.header_name + ".h"
-        cpp_file = args.header_name + ".cpp"
+    if "header_name" in args and args.header_name:
+        header_strip = args.header_name.replace(".h", "")
+        header_file = header_strip + ".h"
+        cpp_file = header_strip + ".cpp"
         if not os.path.isfile(header_file):
-            print("Header file", header_file, "not found. Aborting...")
+            LOGGER.info("Header file %s not found. Aborting...", header_file)
             return
 
         if not os.path.isfile(cpp_file):
-            print("Cpp file", cpp_file, "not found. Aborting...")
+            LOGGER.info("Cpp file %s not found. Aborting...", cpp_file)
             return
 
         lst_headers.append((header_file, cpp_file))
-    else:
+    elif "path" in args and args.path:
 
         files = set(os.listdir(args.path))
 
@@ -194,13 +248,53 @@ def add_class_definitions_to_cpp(
                 cpp_file = file.replace(".h", ".cpp")
 
                 if cpp_file not in files:
-                    print(
-                        "No cpp file found corresponding to",
+                    LOGGER.info(
+                        "No cpp file found corresponding to %s. Ignoring.",
                         file,
-                        ". Ignoring.",
                     )
                     continue
 
                 lst_headers.append((file, cpp_file))
 
-    print("Found", len(lst_headers), "header files to scan")
+    else:
+        LOGGER.info("No header file or path provided")
+        exit(1)
+
+    LOGGER.info("Found %d header files to scan", len(lst_headers))
+    changes_needed: list[tuple[str, str, set[CppFunction]]] = []
+
+    for header_file, cpp_file in lst_headers:
+        # Get functions from files and compare them
+        LOGGER.info("Scanning header file %s", header_file)
+        header_functions = get_functions_from_header(header_file)
+        cpp_functions = get_functions_definitions_from_cpp(cpp_file)
+        missing_functions = compare_functions(header_functions, cpp_functions)
+
+        # Save the files that need changes and display a message
+        if len(missing_functions) > 0:
+            LOGGER.info("The following functions are missing in %s", cpp_file)
+            LOGGER.info("-------------------------------------------------")
+            for func in missing_functions:
+                LOGGER.info(func)
+            LOGGER.info("-------------------------------------------------")
+
+            changes_needed.append((header_file, cpp_file, missing_functions))
+
+    # LOGGER.infos a summary of changes needed
+    LOGGER.info("SUMMARY:")
+    LOGGER.info("%d files with changes needed", len(changes_needed))
+    for header_file, cpp_file, missing_functions in changes_needed:
+        LOGGER.info("Header file requires %d changes", len(missing_functions))
+
+    # Prompt user for confirmation
+    if len(changes_needed) > 0:
+        var_input = input("Do you want to proceed? (y/n)")
+        if var_input.lower() != "y":
+            LOGGER.info("Aborting...")
+            return
+
+        # Make changes to the files
+        for header_file, cpp_file, missing_functions in changes_needed:
+            add_function_definitions(cpp_file, missing_functions)
+
+    LOGGER.info("Done!")
