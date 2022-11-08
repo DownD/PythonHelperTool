@@ -1,6 +1,7 @@
-import argparse
 import os
-from typing import Sequence
+from argparse import ArgumentParser, Namespace
+
+from myutils.script_interface import ScriptInterface
 
 cpp_header_content = """
 
@@ -22,42 +23,51 @@ cpp_source_file = """
 """
 
 
-def create_cpp_class(
-    cpp_parser: argparse.ArgumentParser, args_partial: Sequence[str]
-):
-    """
-    This is the main function of the cpp_tools script.
+class CreateCppClass(ScriptInterface):
+    def __init__(self):
+        super().__init__("create_cpp_class", "Create a cpp class")
 
-    Args:
-        cpp_parser (argparse.ArgumentParser): _description_
-    """
-    cpp_parser.add_argument("class_name", type=str)
-    args = cpp_parser.parse_args(args_partial)
+    def add_subparser_args(self, parser: ArgumentParser):
+        """
+        This function serves to add arguments to the subparser.
 
-    class_name: str = args.class_name
+        Args:
+            parser (ArgumentParser): The subparser of the script
+        """
+        parser.add_argument("class_name", type=str)
 
-    # Enforce CamelCase
-    class_name = class_name[0].capitalize() + class_name[1:]
-    if "_" in class_name:
-        class_name = class_name.replace("_", " ").title().replace(" ", "")
+    def __call__(self, args: Namespace):
+        """
+        This function is called when the script is launched.
 
-    # File names
-    header_file = class_name + ".h"
-    cpp_file = class_name + ".cpp"
+        Args:
+            parser (ArgumentParser): The parser of the script
+            args_partial (list, optional): The arguments to parse. Defaults to None.
+        """
+        class_name: str = args.class_name
 
-    # Check if file already exists
-    if os.path.isfile(cpp_file) or os.path.isfile(header_file):
-        print("File already exists. Aborting...")
-        return
+        # Enforce CamelCase
+        class_name = class_name[0].capitalize() + class_name[1:]
+        if "_" in class_name:
+            class_name = class_name.replace("_", " ").title().replace(" ", "")
 
-    # Create Header file
-    with open(header_file, "w", encoding="utf-8") as file:
-        file.write(cpp_header_content.replace("<class_name>", class_name))
+        # File names
+        header_file = class_name + ".h"
+        cpp_file = class_name + ".cpp"
 
-    print("Created header file: " + header_file)
+        # Check if file already exists
+        if os.path.isfile(cpp_file) or os.path.isfile(header_file):
+            print("File already exists. Aborting...")
+            return
 
-    with open(cpp_file, "w", encoding="utf-8") as file:
-        file.write(cpp_source_file.replace("<class_name>", class_name))
+        # Create Header file
+        with open(header_file, "w", encoding="utf-8") as file:
+            file.write(cpp_header_content.replace("<class_name>", class_name))
 
-    print("Created cpp file: " + cpp_file)
-    print("Files created successfully")
+        print("Created header file: " + header_file)
+
+        with open(cpp_file, "w", encoding="utf-8") as file:
+            file.write(cpp_source_file.replace("<class_name>", class_name))
+
+        print("Created cpp file: " + cpp_file)
+        print("Files created successfully")
