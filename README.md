@@ -12,6 +12,7 @@ Simple project to have my scripts that I use on a daily basis into a single modu
 ## Current Scripts
 - ```create_cpp_class```: Create a new C++ class header and source file given a class name.
 - ```add_cpp_definitions```: Add definitions of an C++ header to the cpp file if not present.
+- ```video_img_split```: Saves multiple frames from a video and stored them as .jpg.
 
 ## Add new scripts
 To add new scripts just create a new file and extend the class ```ScriptInterface``` in ```script_interface.py``` by implementing the required methods.
