@@ -4,8 +4,13 @@ from argparse import ArgumentParser
 from myutils.cpp_class_creator import CreateCppClass
 from myutils.cpp_definition_adder import CppFunctionAdder
 from myutils.script_interface import ScriptInterface
+from myutils.video_img_grabber import VideoImgSplit
 
-scripts_list: list[ScriptInterface] = [CppFunctionAdder(), CreateCppClass()]
+scripts_list: list[ScriptInterface] = [
+    CppFunctionAdder(),
+    CreateCppClass(),
+    VideoImgSplit(),
+]
 
 
 def main():
@@ -13,7 +18,7 @@ def main():
     This is the main function of the script.
     """
     logging.basicConfig(
-        level=logging.INFO, format="[%(levelname)s] %(message)s"
+        level=logging.DEBUG, format="[%(levelname)s] %(message)s"
     )
 
     parser = ArgumentParser()
@@ -28,7 +33,11 @@ def main():
         script_parser.set_defaults(func=script.__call__)
 
     args = parser.parse_args()
-    args.func(args)  # pylint: disable=no-member
+
+    if "func" in args:
+        args.func(args)  # pylint: disable=no-member
+    else:
+        parser.print_help()
 
 
 if "__main__" == __name__:
