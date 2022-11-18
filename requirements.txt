@@ -1,1 +1,4 @@
 cv2
+onnxruntime
+onnxruntime-gpu
+numpy

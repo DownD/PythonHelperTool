@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 
 from myutils.cpp_class_creator import CreateCppClass
 from myutils.cpp_definition_adder import CppFunctionAdder
+from myutils.cv_inference import CVInference
 from myutils.script_interface import ScriptInterface
 from myutils.video_img_grabber import VideoImgSplit
 
@@ -10,6 +11,7 @@ scripts_list: list[ScriptInterface] = [
     CppFunctionAdder(),
     CreateCppClass(),
     VideoImgSplit(),
+    CVInference(),
 ]
 
 
