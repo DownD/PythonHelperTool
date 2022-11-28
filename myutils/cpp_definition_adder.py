@@ -103,7 +103,7 @@ class CppFunctionAdder(ScriptInterface):
             file_path (str): The path for the header file.
 
         Returns:
-            set[CppFunction]: A set conatining the functions found in the header file.
+            set[CppFunction]: A set containing the functions found in the header file.
         """
         file_data: str = ""
         with open(file_path, "r", encoding="utf-8") as file:
@@ -117,7 +117,7 @@ class CppFunctionAdder(ScriptInterface):
         file_data = file_data.replace("\r", "").replace("\n", "")
 
         # Get classes and functions using regex
-        class_regex = r"class\s+(\w+)\s*{([^}]+)}"
+        class_regex = r"class\s+(\w+).*?{([^}]+)}"
         function_regex = r"(\w+)\s+(\w+)\s*\(([^)]*)\)"
 
         # Set with all class functions
@@ -206,7 +206,7 @@ class CppFunctionAdder(ScriptInterface):
             file.write(content)
             file.truncate()
             LOGGER.info(
-                "%d changes have been written to {cpp_file}", {len(functions)}
+                "%d changes have been written to %s", len(functions), cpp_file
             )
 
     def add_subparser_args(self, parser: ArgumentParser):
@@ -219,6 +219,13 @@ class CppFunctionAdder(ScriptInterface):
         parser.add_argument(
             "-f", "--file", type=str, help="The header file name"
         )
+
+        parser.add_argument(
+            "-c",
+            "--create_cpp",
+            action="store_true",
+            help="Create the cpp file if it doesn't exist",
+        )
         parser.add_argument(
             "-p",
             "--path",
@@ -228,6 +235,18 @@ class CppFunctionAdder(ScriptInterface):
             nargs="?",
             help="The path",
         )
+
+    def create_cpp_file(self, cpp_file: str):
+        """
+        This function creates the cpp file.
+
+        Args:
+            cpp_file (str): The path of the cpp file.
+        """
+
+        header_name = os.path.basename(cpp_file).replace(".cpp", ".h")
+        with open(cpp_file, "w", encoding="utf-8") as file:
+            file.write(f'#include "{header_name}"\n')
 
     def __call__(self, args: Namespace):
         """
@@ -239,8 +258,8 @@ class CppFunctionAdder(ScriptInterface):
         """
         lst_headers: list[tuple[str, str]] = []
 
-        if "header_name" in args and args.header_name:
-            header_strip = args.header_name.replace(".h", "")
+        if "file" in args and args.file:
+            header_strip = args.file.replace(".h", "")
             header_file = header_strip + ".h"
             cpp_file = header_strip + ".cpp"
             if not os.path.isfile(header_file):
@@ -250,12 +269,16 @@ class CppFunctionAdder(ScriptInterface):
                 return
 
             if not os.path.isfile(cpp_file):
-                LOGGER.info("Cpp file %s not found. Aborting...", cpp_file)
-                return
+                if args.create_cpp:
+                    LOGGER.info("Creating cpp file %s", cpp_file)
+                    self.create_cpp_file(cpp_file)
+                else:
+                    LOGGER.info("Cpp file %s not found. Aborting...", cpp_file)
+                    return
 
             lst_headers.append((header_file, cpp_file))
-        elif "path" in args and args.path:
 
+        elif "path" in args and args.path:
             files = set(os.listdir(args.path))
 
             # Search for headers in the path
@@ -264,11 +287,15 @@ class CppFunctionAdder(ScriptInterface):
                     cpp_file = file.replace(".h", ".cpp")
 
                     if cpp_file not in files:
-                        LOGGER.info(
-                            "No cpp file found corresponding to %s. Ignoring.",
-                            file,
-                        )
-                        continue
+                        if args.create_cpp:
+                            LOGGER.info("Creating cpp file %s", cpp_file)
+                            self.create_cpp_file(cpp_file)
+                        else:
+                            LOGGER.info(
+                                "No cpp file found corresponding to %s. Ignoring.",
+                                file,
+                            )
+                            continue
 
                     lst_headers.append((file, cpp_file))
 
@@ -309,7 +336,7 @@ class CppFunctionAdder(ScriptInterface):
                 )
 
         # LOGGER.infos a summary of changes needed
-        LOGGER.info("SUMMARY:")
+        LOGGER.info("--------------------SUMMARY----------------------")
         LOGGER.info("%d files with changes needed", len(changes_needed))
         for header_file, cpp_file, missing_functions in changes_needed:
             LOGGER.info(
@@ -326,5 +353,3 @@ class CppFunctionAdder(ScriptInterface):
             # Make changes to the files
             for header_file, cpp_file, missing_functions in changes_needed:
                 self.add_function_definitions(cpp_file, missing_functions)
-
-        LOGGER.info("Done!")
